@@ -92,3 +92,39 @@
   (let* ([x (+ x 2)]
          [y (+ x 3)])
     (+ x y -7)))
+
+;; lazy evaluations or thunks (functions with no arguments)
+(define (my-mult x y-thunk)
+  (cond [(= x 0) 0]
+        [(= x 1) (y-thunk)]
+        [#t (+ (y-thunk) (my-mult (- x 1) y-thunk))]))
+
+;; delay and force evaluations
+(define (my-delay th)
+  (mcons #f th)) ;; make a mutable pair with bool and thunk
+
+(define (my-force p)
+  (if (mcar p)
+      (mcdr p)
+      (begin (set-mcar! p #t)         ; we mutate it only once
+             (set-mcdr! p ((mcdr p))) ; evaluate p and place it to thunk
+             (mcdr p))))              ; evaluate thunk
+
+;; creating streams
+; produces 1
+(define ones (lambda () (cons 1 ones)))
+
+; takes x and produces x + 1
+(define (nat-from x) (cons x (lambda () (nat-from (+ x 1)))))
+
+; power of 2
+(define to-power (lambda (x) (cons x (lambda () (to-power (* x x))))))
+(define power-of-two (lambda () (to-power 2)))
+
+; takes function and argument
+; produces stream
+(define (stream-maker fn arg) (cons arg (lambda () (stream-maker fn (fn arg)))))
+
+; examples
+(define ones-2 (lambda () (stream-maker (lambda (x) x) 1)))
+(define power-of-two-2 (lambda () (stream-maker (lambda (x) (* x x)) 2)))
