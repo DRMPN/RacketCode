@@ -115,10 +115,11 @@
 (define ones (lambda () (cons 1 ones)))
 
 ; takes x and produces x + 1
-(define (nat-from x) (cons x (lambda () (nat-from (+ x 1)))))
+(define nat-from (lambda (x) (cons x (lambda () (nat-from (+ x 1))))))
+(define from-zero (lambda () (nat-from 0)))
 
 ; power of 2
-(define to-power (lambda (x) (cons x (lambda () (to-power (* x x))))))
+(define to-power (lambda (x) (cons x (lambda () (to-power (* x 2))))))
 (define power-of-two (lambda () (to-power 2)))
 
 ; takes function and argument
