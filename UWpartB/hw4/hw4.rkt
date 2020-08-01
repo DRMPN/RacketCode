@@ -1,4 +1,5 @@
 ;; Homework assignment 4 | UWpartA | by SID 2020
+
 #lang racket
 
 (provide (all-defined-out)) ;; so we can put tests in a second file
@@ -37,27 +38,58 @@
       (nat-stream 1))))
 
 ;; >>>--- Problem 6 ---<<<
-(define dan-than-dog
-  (lambda ()
-    (letrec ([dan (lambda () (cons "dan.jpg" (lambda () (dog) )))]
-             [dog (lambda () (cons "dog.jpg" (lambda () (dan) )))])
-      (dan))))
+(define dan-then-dog
+    (letrec ([dan (lambda () (cons "dan.jpg" dog ))]
+             [dog (lambda () (cons "dog.jpg" dan ))])
+      dan))
 
 ;; >>>--- Problem 7 ---<<<
-(define stream-add-zero
-  (lambda (s)
-    (lambda () (cons (cons 0 (car (s))) (cdr (s))))))
+(define (stream-add-zero s)
+  (lambda ()
+      (cons (cons 0 (car (s))) (stream-add-zero (cdr (s))))))
 
 ;; >>>--- Problem 8 ---<<<
-;; TODO: reforge this
 (define (cycle-lists xs ys)
-  (lambda ()
-    (letrec ([aux
-              (lambda (xs ys)
-                (cons (cons (car xs) (car ys))
-                      (lambda ()
-                        (aux (append (cdr xs) (list (car xs))) (append (cdr ys) (list (car ys)))))))])
+  (lambda ()                                       ;; make stream
+    (letrec ([aux (lambda (xs ys)                  ;; helper
+                    (cons (cons (car xs) (car ys)) ;; first pair
+                          (lambda ()               ;; rest stream
+                            (aux (append (cdr xs) (list (car xs))) 
+                                 (append (cdr ys) (list (car ys)))))))])
       (aux xs ys))))
 
+
 ;; >>>--- Problem 9 ---<<<
+(define (vector-assoc val vec)
+  (letrec
+      ([veclen (vector-length vec)] ;; saved length to avoid rep. comp.
+       [aux (lambda (n)
+              (letrec ([vecref (lambda () (vector-ref vec n))] ;; lazy evaluation otherwise error
+                       [notpair? (lambda () (or (not (pair? (vecref))) (list? (vecref))))])
+                (cond
+                  [(<= veclen n) #f]                     ;; empty? -> false 
+                  [(notpair?) (aux (+ n 1))]             ;; not pair? -> skip
+                  [(equal? val (car (vecref))) (vecref)] ;; element? -> result
+                  [#t (aux (+ n 1))])))])                ;; _ -> go again
+    (aux 0)))                                            ;; start of a helper fun
+
 ;; >>>--- Problem 10 ---<<<
+(define (cached-assoc xs n)
+  (letrec ([cache (make-vector n #f)]             ;; produces empty cache
+           [value null]                           ;; mutates only once
+           [f (lambda (v)                         ;; adds accumulators
+                (begin (set! value v) (g xs 0)))] ;; ! mutation
+           [g (lambda (xs acc)
+                (cond [(null? xs) #f]                                ;; empty case
+                      [#t (let ([ans (vector-assoc (caar xs) cache)] ;; find value in cache
+                                ;; checks and changes bound of the cache [0,n-1]
+                                [inrange? (lambda (x) (if (>= x (- n 1)) 0 (+ x 1)))])
+                            (cond
+                              ;; in the cache -> change cache's last element, go again
+                              [ans (begin (vector-set! cache acc ans) (g (cdr xs) acc))]
+                              ;; matches? -> add value to cache, produce an answer
+                              [(= value (caar xs)) (begin (vector-set! cache acc (car xs)) (car xs))]
+                              ;; notfound? -> add value to cache, change limit, go again
+                              [#t (begin (vector-set! cache acc (car xs))
+                                         (g (cdr xs) (inrange? acc)))]))]))])
+    f))
