@@ -64,49 +64,50 @@
                (error "MUPL addition applied to non-number")))]
         [(ifgreater? e)
          (let ([v1 (eval-under-env (ifgreater-e1 e) env)]
-               [v2 (eval-under-env (ifgreater-e2 e) env)]
-               [v3 (eval-under-env (ifgreater-e3 e) env)]
-               [v4 (eval-under-env (ifgreater-e4 e) env)])
-           (if (and (int? v1) (int? v2) (int? v3) (int? v4))
-               (if (> (int-num v1) (int-num v2))
-                   v3
-                   v4)
-               (error "MUPL ifgreater? applied to non-number")))]
+               [v2 (eval-under-env (ifgreater-e2 e) env)])
+           (if (and (int? v1) (int? v2))
+               (eval-under-env (if (> (int-num v1) (int-num v2))
+                                   (ifgreater-e3 e)
+                                   (ifgreater-e4 e)) env)
+               (error "MUPL ifgreater applied to non-number")))]
         [(fun? e) (closure env e)]
         [(call? e)
-         (let ([v1 (eval-under-env (call-funexp e) env)]     ;; evaluate closure
-               [v2 (eval-under-env (call-actual e) env)])    ;; evaluate function argument
-          (if (not (closure? v1))
-              (error "MUPL call applied to non-closure")
-              (letrec ([c-env (closure-env v1)]              ;; environment under closure 
-                       [c-fun (closure-fun v1)]              ;; function under closure                   
-                       [fname (cons (fun-nameopt c-fun) v1)] ;; fun name & closure
-                       [fvar (cons (fun-formal c-fun) v2)])  ;; variable & argument
-                (eval-under-env (fun-body c-fun)             ;; evaluate funciton body
-                 (if (eq? (car fname) #f) 
-                     (cons fvar c-env)                       ;; variable & closure env
-                     (cons fvar (cons fname c-env)))))))]    ;; variable & recursive funtion & closure env
-        [(mlet? e) (eval-under-env (mlet-body e) (cons (cons (mlet-var e) (mlet-e e)) env))]
+         (let ([v1 (eval-under-env (call-funexp e) env)]  ;; evaluate closure with function
+               [v2 (eval-under-env (call-actual e) env)]) ;; evaluate passed argument
+           (if (not (closure? v1))
+               (error "MUPL call applied to non-closure")
+               (letrec
+                   ([clo-env (closure-env v1)]                 ;; env under closure
+                    [clo-fun (closure-fun v1)]                 ;; fun under closure
+                    [fun-name (cons (fun-nameopt clo-fun) v1)] ;; fun name and closure with function
+                    [fun-var (cons (fun-formal clo-fun) v2)])  ;; fun variable and passed argument
+                 (eval-under-env (fun-body clo-fun)                               ;; evaluate funciton body
+                                 (if (eq? (car fun-name) #f)                      ;; lambda function check
+                                     (cons fun-var clo-env)                       ;; variable & closure env
+                                     (cons fun-name (cons fun-var clo-env)))))))] ;; variable & recursive funtion & closure env
+        [(mlet? e)
+         (let ([v (eval-under-env (mlet-e e) env)]) 
+           (eval-under-env (mlet-body e) (cons (cons (mlet-var e) v) env)))]
         [(apair? e)
          (let ([v1 (eval-under-env (apair-e1 e) env)]
                [v2 (eval-under-env (apair-e2 e) env)])
            (apair v1 v2))]
         [(fst? e)
-         (let ([v (fst-e e)])
+         (let ([v (eval-under-env (fst-e e) env)])
            (if (apair? v)
                (apair-e1 v)
                (error "MUPL fst applied to non-pair"))) ]
         [(snd? e)
-         (let ([v (snd-e e)])
+         (let ([v (eval-under-env (snd-e e) env)])
            (if (apair? v)
                (apair-e2 v)
                (error "MUPL snd applied to non-pair")))]
         [(aunit? e) e]
         [(isaunit? e)
          (let ([v (eval-under-env (isaunit-e e) env)])
-               (if (aunit? v)
-                   (int 1)
-                   (int 0)))]
+           (if (aunit? v)
+               (int 1)
+               (int 0)))]
         [(closure? e) e]
         [#t (error (format "bad MUPL expression: ~v" e))]))
 
@@ -115,20 +116,37 @@
   (eval-under-env e null))
         
 ;; Problem 3
+;; >>> ---(a)--- <<<
+(define (ifaunit e1 e2 e3) (ifgreater (isaunit e1) (int 0) e2 e3))
 
-(define (ifaunit e1 e2 e3) "CHANGE")
+;; >>> ---(b)--- <<<
+(define (mlet* lstlst e2)
+ (if (null? lstlst)
+     e2
+     (mlet (caar lstlst) (cdar lstlst) (mlet* (cdr lstlst) e2))))
 
-(define (mlet* lstlst e2) "CHANGE")
-
-(define (ifeq e1 e2 e3 e4) "CHANGE")
+;; >>> ---(c)--- <<<
+(define (ifeq e1 e2 e3 e4)
+  (mlet* (list (cons "_x" e1) (cons "_y" e2))
+         (ifgreater (var "_x") (var "_y") e4 (ifgreater (var "_y") (var "_x") e4 e3))))
 
 ;; Problem 4
+;; >>> ---(a)--- <<<
+(define mupl-map
+  (fun #f "f"
+       (fun "aux" "xs"
+            (ifgreater (isaunit (var "xs")) (int 0) 
+                       (aunit) 
+                        (apair 
+                         (call (var "f") (fst (var "xs")))
+                         (call (var "aux") (snd (var "xs"))))))))
 
-(define mupl-map "CHANGE")
-
+;; >>> ---(b)--- <<<
 (define mupl-mapAddN 
   (mlet "map" mupl-map
-        "CHANGE (notice map is now in MUPL scope)"))
+        (fun #f "i"
+             (call (var "map")
+                   (fun #f "n" (add (var "n") (var "i")))))))
 
 ;; Challenge Problem
 
@@ -146,3 +164,19 @@
 ;; Do NOT change this
 (define (eval-exp-c e)
   (eval-under-env-c (compute-free-vars e) null))
+
+;(define (mlet* lstlst e2)
+;  (letrec ([aux (lambda (xs acc)
+;                  (if (null? xs)
+;                      acc
+;                      (let ([s (caar xs)]                         
+;                            [e (eval-under-env (cdar xs) acc)])   
+;                        (aux (cdr xs) (cons (cons s e) acc)))))])
+;    (eval-under-env e2 (aux lstlst null))))
+
+;(define (mlet* lstlst e2)
+;  (let ([aux (foldl (lambda (pair env)
+;                      (let ([s (car pair)]                         
+;                            [e (eval-under-env (cdr pair) env)])
+;                        (cons (cons s e) env))) null lstlst)])
+;    (eval-under-env e2 aux )))
